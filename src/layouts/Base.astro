@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+
+const {
+  title,
+  description,
+  canonicalPath = Astro.url.pathname,
+  jsonLd = null,
+} = Astro.props;
+
+const site = Astro.site?.toString().replace(/\/$/, '') ?? '';
+const canonical = `${site}${canonicalPath}`;
+const fullTitle = title ? `${title} — Nepal Macro Overview` : 'Nepal Macro Overview';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nepal Macro Overview" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="wrap masthead-inner">
+        <a class="wordmark" href="/">
+          <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+            <path d="M2 1 L18 8.5 L7 10 L16 19 L2 23 Z" fill="#a30f2d" stroke="#123a7d" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+          <span>Nepal<em>Macro</em></span>
+        </a>
+        <nav aria-label="Main">
+          <a href="/">Overview</a>
+          <a href="/forecasts/">Forecasts</a>
+          <a href="/#indicators">Indicators</a>
+          <a href="/about/">About</a>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>
+          Data: <a href="https://data.worldbank.org/country/nepal" rel="noopener">World Bank WDI</a> ·
+          <a href="https://www.imf.org/en/Publications/WEO" rel="noopener">IMF World Economic Outlook</a>.
+          Stored in Neon Postgres, refreshed weekly by GitHub Actions. Built with Astro — zero client-side JavaScript.
+        </p>
+        <p class="fine">Figures marked “proj.” are IMF staff projections. For research and education; not investment advice.</p>
+      </div>
+    </footer>
+  </body>
+</html>
