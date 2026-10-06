@@ -1,0 +1,83 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadData } from '../lib/data.js';
+import { fmt } from '../lib/format.js';
+import { lineChart } from '../lib/chart.js';
+
+const data = await loadData();
+const obs = data.observations;
+const WEO = ['NGDP_RPCH', 'PCPIPCH', 'NGDPD', 'NGDPDPC', 'BCA_NGDPD', 'GGXWDG_NGDP'];
+const indByCode = Object.fromEntries(data.indicators.map((i) => [i.code, i]));
+const years = [2025, 2026, 2027, 2028, 2029, 2030];
+
+const cell = (code, y) => {
+  const row = (obs[code] || []).find((r) => r.year === y);
+  return row ? fmt(row.value, indByCode[code]?.unit) : '—';
+};
+---
+
+<Base
+  title="IMF Forecasts 2025–2030"
+  description="IMF World Economic Outlook projections for Nepal, 2025–2030: real GDP growth, inflation, nominal GDP, GDP per capita, current account balance and government debt."
+  canonicalPath="/forecasts/"
+>
+  <header class="page-head">
+    <p class="kicker">Outlook</p>
+    <h1>Where Nepal's economy is heading: IMF projections to 2030</h1>
+    <p class="lede">
+      The IMF's World Economic Outlook projects Nepal's real GDP growth to recover toward 5% by 2028–2030,
+      with inflation anchored near 5%, the current account drifting back into deficit,
+      and government debt easing below 47% of GDP by the end of the decade.
+    </p>
+    <p class="byline">Source: IMF, World Economic Outlook database · All values from 2025 onward are staff projections</p>
+  </header>
+
+  <section class="block">
+    <h2>Projection summary</h2>
+    <table class="data">
+      <caption>IMF WEO projections for Nepal. Detail pages linked from each row.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Indicator</th>
+          {years.map((y) => <th scope="col">{y}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {WEO.map((code) => (
+          <tr class="proj">
+            <td style="text-align:left"><a href={`/indicators/${encodeURIComponent(code)}/`}>{indByCode[code]?.name ?? code}</a></td>
+            {years.map((y) => <td>{cell(code, y)}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="block">
+    <h2>Growth &amp; inflation path</h2>
+    <div class="duo">
+      <div class="figure">
+        <h3><a href="/indicators/NGDP_RPCH/">Real GDP growth — IMF WEO</a></h3>
+        <div class="fig-meta">Dashed section: projections</div>
+        <Fragment set:html={lineChart(obs['NGDP_RPCH'], { forecastFrom: data.forecast_from_year })} />
+      </div>
+      <div class="figure">
+        <h3><a href="/indicators/PCPIPCH/">Inflation — IMF WEO</a></h3>
+        <div class="fig-meta">Dashed section: projections</div>
+        <Fragment set:html={lineChart(obs['PCPIPCH'], { forecastFrom: data.forecast_from_year })} />
+      </div>
+      <div class="figure">
+        <h3><a href="/indicators/GGXWDG_NGDP/">Government gross debt (% of GDP)</a></h3>
+        <div class="fig-meta">Dashed section: projections</div>
+        <Fragment set:html={lineChart(obs['GGXWDG_NGDP'], { forecastFrom: data.forecast_from_year })} />
+      </div>
+      <div class="figure">
+        <h3><a href="/indicators/BCA_NGDPD/">Current account balance (% of GDP)</a></h3>
+        <div class="fig-meta">Dashed section: projections</div>
+        <Fragment set:html={lineChart(obs['BCA_NGDPD'], { forecastFrom: data.forecast_from_year })} />
+      </div>
+    </div>
+  </section>
+
+  <p><a href="/">← Back to the full overview</a></p>
+</Base>

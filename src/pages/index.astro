@@ -1,0 +1,153 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadData, latest, latestActual } from '../lib/data.js';
+import { fmt } from '../lib/format.js';
+import { lineChart } from '../lib/chart.js';
+import { CATEGORIES, SOURCE_LABELS } from '../lib/meta.js';
+
+const data = await loadData();
+const obs = data.observations;
+const indByCode = Object.fromEntries(data.indicators.map((i) => [i.code, i]));
+
+const firstForecast = (s) => (s || []).find((d) => d.forecast) ?? latest(s);
+
+const pick = (code, useForecast = false) => {
+  const s = obs[code];
+  if (!s) return null;
+  return useForecast ? firstForecast(s) : latestActual(s);
+};
+
+// KPI strip: World Bank actuals + IMF projections
+const kpis = [
+  { label: 'GDP', code: 'NY.GDP.MKTP.CD' },
+  { label: 'Real growth', code: 'NGDP_RPCH', fc: true },
+  { label: 'CPI inflation', code: 'PCPIPCH', fc: true },
+  { label: 'Remittances / GDP', code: 'BX.TRF.PWKR.DT.GD.ZS' },
+  { label: 'Govt debt / GDP', code: 'GGXWDG_NGDP', fc: true },
+  { label: 'Current acct / GDP', code: 'BCA_NGDPD', fc: true },
+].map((k) => {
+  const point = k.fc ? pick(k.code, true) : pick(k.code, false);
+  const ind = indByCode[k.code];
+  return { ...k, point, ind };
+});
+
+const catOrder = ['growth', 'prices', 'external', 'fiscal', 'debt', 'financial', 'social'];
+// One hero chart per category: prefer IMF WEO series (they carry projections)
+const heroByCat = {
+  growth: 'NGDP_RPCH',
+  prices: 'PCPIPCH',
+  external: 'BX.TRF.PWKR.DT.GD.ZS',
+  fiscal: 'GGXWDG_NGDP',
+  debt: 'DT.DOD.DECT.CD',
+  financial: 'FS.AST.PRVT.GD.ZS',
+  social: 'SP.POP.TOTL',
+};
+
+const byCat = {};
+for (const ind of data.indicators) (byCat[ind.category] ||= []).push(ind);
+
+const gdpNow = pick('NY.GDP.MKTP.CD');
+const growthF = pick('NGDP_RPCH', true);
+const genYear = new Date(data.generated_at).toISOString().slice(0, 10);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: 'Nepal Macroeconomic & Financial Indicators',
+  description:
+    'Time series of Nepal macroeconomic and financial indicators from the World Bank World Development Indicators and the IMF World Economic Outlook, refreshed weekly.',
+  creator: { '@type': 'Organization', name: 'Nepal Macro Overview' },
+  dateModified: genYear,
+  license: 'https://datacatalog.worldbank.org/public-licenses',
+  isBasedOn: ['https://data.worldbank.org/country/nepal', 'https://www.imf.org/en/Publications/WEO'],
+  about: { '@type': 'Country', name: 'Nepal' },
+};
+---
+
+<Base
+  title="Overview"
+  description={`Nepal economic overview: GDP of ${gdpNow ? fmt(gdpNow.value, 'US$') : ''} (${gdpNow?.year}), real GDP growth projected at ${growthF ? fmt(growthF.value, '%') : ''} for ${growthF?.year}. ${data.indicators.length} indicators from the World Bank and IMF, refreshed weekly.`}
+  jsonLd={jsonLd}
+>
+  <header class="page-head">
+    <p class="kicker">Country Economic Report</p>
+    <h1>Nepal, in every financial dimension</h1>
+    <p class="lede">
+      Nepal is a {gdpNow ? fmt(gdpNow.value, 'US$') : ''} economy ({gdpNow?.year}) of
+      {' '}{obs['SP.POP.TOTL'] ? fmt(latestActual(obs['SP.POP.TOTL'])?.value, 'people') : ''} people,
+      powered by remittances worth
+      {' '}{pick('BX.TRF.PWKR.DT.GD.ZS') ? fmt(pick('BX.TRF.PWKR.DT.GD.ZS')?.value, '% of GDP') : ''} of GDP.
+      The IMF projects growth of {growthF ? fmt(growthF.value, '%') : ''} for {growthF?.year}.
+      This page tracks {data.indicators.length} indicators across growth, prices, the external sector,
+      public finances, banking, and society — refreshed weekly, straight from the World Bank and the IMF.
+    </p>
+    <p class="byline">
+      Data through {genYear} · Sources: {SOURCE_LABELS.world_bank}; {SOURCE_LABELS.imf_weo}
+      {data.live ? ' · Served live from Neon Postgres' : ' · Served from the committed data snapshot'}
+    </p>
+  </header>
+
+  <div class="kpis" role="list" aria-label="Key indicators">
+    {kpis.map((k) => (
+      <div class="kpi" role="listitem">
+        <div class="k-label">{k.label}</div>
+        <div class:list={['k-value', { proj: k.point?.forecast }]}>{k.point ? fmt(k.point.value, k.ind?.unit) : '—'}</div>
+        <div class="k-sub">{k.point?.year}{k.point?.forecast ? ' · IMF proj.' : ''} · {k.ind?.source === 'imf_weo' ? 'IMF WEO' : 'World Bank'}</div>
+      </div>
+    ))}
+  </div>
+
+  {catOrder.map((cat) => {
+    const list = byCat[cat];
+    if (!list) return null;
+    const heroCode = heroByCat[cat];
+    const hero = indByCode[heroCode];
+    const heroSeries = obs[heroCode];
+    const others = list.filter((i) => i.code !== heroCode).slice(0, 3);
+    return (
+      <section class="block" id={cat}>
+        <h2>{CATEGORIES[cat]}</h2>
+        <p class="section-note">{list.length} indicator{list.length > 1 ? 's' : ''}</p>
+        <div class="duo">
+          {hero && heroSeries && (
+            <div class="figure">
+              <h3><a href={`/indicators/${encodeURIComponent(hero.code)}/`}>{hero.name}</a></h3>
+              <div class="fig-meta">{hero.source === 'imf_weo' ? 'IMF WEO (with projections)' : 'World Bank'} · {heroSeries[0].year}–{heroSeries[heroSeries.length - 1].year}</div>
+              <Fragment set:html={lineChart(heroSeries, { forecastFrom: data.forecast_from_year })} />
+            </div>
+          )}
+          {others.map((ind) => {
+            const s = obs[ind.code];
+            if (!s || !s.length) return null;
+            return (
+              <div class="figure">
+                <h3><a href={`/indicators/${encodeURIComponent(ind.code)}/`}>{ind.name}</a></h3>
+                <div class="fig-meta">{ind.source === 'imf_weo' ? 'IMF WEO (with projections)' : 'World Bank'} · {s[0].year}–{s[s.length - 1].year}</div>
+                <Fragment set:html={lineChart(s, { forecastFrom: data.forecast_from_year })} />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  })}
+
+  <section class="block" id="indicators">
+    <h2>All indicators</h2>
+    <p class="section-note">Every tracked series, with its latest reading. Click through for full history and projections.</p>
+    <ul class="index-list">
+      {data.indicators.map((ind) => {
+        const s = obs[ind.code];
+        const point = s && s.length ? (ind.source === 'imf_weo' ? firstForecast(s) : latestActual(s)) : null;
+        return (
+          <li>
+            <a href={`/indicators/${encodeURIComponent(ind.code)}/`}>
+              <span>{ind.name}</span>
+              <span class="latest">{point ? `${fmt(point.value, ind.unit)} · ${point.year}${point.forecast ? ' (proj.)' : ''}` : '—'}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+</Base>
