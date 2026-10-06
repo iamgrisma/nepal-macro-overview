@@ -1,0 +1,91 @@
+---
+import Base from '../../layouts/Base.astro';
+import { loadData, latest, latestActual } from '../../lib/data.js';
+import { fmt } from '../../lib/format.js';
+import { lineChart } from '../../lib/chart.js';
+import { DESCRIPTIONS, SOURCE_LABELS, SOURCE_URLS, CATEGORIES } from '../../lib/meta.js';
+
+export async function getStaticPaths() {
+  const data = await loadData();
+  return data.indicators
+    .filter((ind) => (data.observations[ind.code] || []).length > 0)
+    .map((ind) => ({ params: { code: ind.code }, props: { ind } }));
+}
+
+const { ind } = Astro.props;
+const data = await loadData();
+const series = (data.observations[ind.code] || []).slice().sort((a, b) => a.year - b.year);
+const description = DESCRIPTIONS[ind.code] ?? '';
+const sourceLabel = SOURCE_LABELS[ind.source] ?? ind.source;
+const sourceUrl = SOURCE_URLS[ind.source];
+const point = ind.source === 'imf_weo' ? latest(series) : latestActual(series);
+const recent = series.slice(-12).reverse();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: `${ind.name} — Nepal`,
+  description: `${description} Time series ${series[0]?.year}–${series[series.length - 1]?.year}, source: ${sourceLabel}.`,
+  isBasedOn: sourceUrl,
+  about: { '@type': 'Country', name: 'Nepal' },
+  variableMeasured: ind.name,
+};
+---
+
+<Base
+  title={ind.name}
+  description={`${ind.name} for Nepal: ${point ? `${fmt(point.value, ind.unit)} in ${point.year}${point.forecast ? ' (IMF projection)' : ''}` : 'time series'}. ${description} Source: ${sourceLabel}.`}
+  canonicalPath={`/indicators/${encodeURIComponent(ind.code)}/`}
+  jsonLd={jsonLd}
+>
+  <header class="page-head">
+    <p class="kicker"><a href={`/#${ind.category}`} style="color:inherit;text-decoration:none">{CATEGORIES[ind.category] ?? 'Indicator'}</a></p>
+    <h1>{ind.name}</h1>
+    <p class="lede">{description}</p>
+    <p class="byline">
+      Latest: <strong>{point ? `${fmt(point.value, ind.unit)} (${point.year}${point.forecast ? ', IMF projection' : ''})` : '—'}</strong>
+      · Source: <a href={sourceUrl} rel="noopener">{sourceLabel}</a>
+      · Code: <code>{ind.code}</code>
+    </p>
+  </header>
+
+  <section class="block">
+    <Fragment set:html={lineChart(series, { forecastFrom: data.forecast_from_year, height: 320 })} />
+  </section>
+
+  <section class="block">
+    <h2>Recent values</h2>
+    <table class="data">
+      <caption>Latest {recent.length} observations. Rows in blue with the “proj.” tag are IMF staff projections.</caption>
+      <thead>
+        <tr><th scope="col">Year</th><th scope="col">Value ({ind.unit})</th></tr>
+      </thead>
+      <tbody>
+        {recent.map((r) => (
+          <tr class:list={[{ proj: r.forecast }]}>
+            <td>{r.year}{r.forecast && <span class="tag-proj">proj.</span>}</td>
+            <td>{fmt(r.value, ind.unit)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <details>
+      <summary style="cursor:pointer;font-size:14px;color:var(--muted)">Full series ({series.length} observations)</summary>
+      <table class="data">
+        <thead>
+          <tr><th scope="col">Year</th><th scope="col">Value ({ind.unit})</th></tr>
+        </thead>
+        <tbody>
+          {series.slice().reverse().map((r) => (
+            <tr class:list={[{ proj: r.forecast }]}>
+              <td>{r.year}{r.forecast && <span class="tag-proj">proj.</span>}</td>
+              <td>{fmt(r.value, ind.unit)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <p><a href="/">← Back to the full overview</a></p>
+</Base>

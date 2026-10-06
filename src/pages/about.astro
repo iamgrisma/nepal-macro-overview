@@ -1,0 +1,62 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadData } from '../lib/data.js';
+const data = await loadData();
+const genYear = new Date(data.generated_at).toISOString().slice(0, 10);
+---
+
+<Base
+  title="About & Methodology"
+  description="How the Nepal Macro Overview is built: World Bank and IMF data stored in Neon Postgres, pre-rendered with Astro, refreshed weekly by GitHub Actions, deployable to Cloudflare Pages or Vercel."
+  canonicalPath="/about/"
+>
+  <header class="page-head">
+    <p class="kicker">Methodology</p>
+    <h1>About this project</h1>
+  </header>
+
+  <div class="prose">
+    <h2>What this is</h2>
+    <p>
+      A complete, automatically refreshed macroeconomic and financial profile of Nepal — {data.indicators.length} indicators
+      spanning growth and output, prices, the external sector, public finances, external debt, the financial system,
+      and population and poverty. The entire site is pre-rendered HTML with zero client-side JavaScript, so it is fast
+      at the edge and fully readable by search engines.
+    </p>
+
+    <h2>Data sources</h2>
+    <ul>
+      <li>
+        <strong>World Bank, World Development Indicators</strong> — historical annual series, 2000 onward
+        (GDP, remittances, FDI, trade, external debt, credit, broad money, population, poverty).
+      </li>
+      <li>
+        <strong>IMF, World Economic Outlook</strong> — historical values plus staff projections through 2030
+        (real growth, inflation, nominal GDP, GDP per capita, current account, government debt).
+      </li>
+    </ul>
+
+    <h2>Pipeline</h2>
+    <ol>
+      <li>A Python script (<code>scripts/refresh_data.py</code>) pulls the latest series from the public World Bank API and the IMF DataMapper API.</li>
+      <li>Results are upserted into a Neon serverless Postgres database and written to <code>data/snapshot.json</code>.</li>
+      <li>Astro pre-renders every page at build time — reading from Neon when <code>DATABASE_URL</code> is set, otherwise from the snapshot.</li>
+      <li>GitHub Actions runs this whole loop weekly (Mondays 06:00 UTC) and deploys the static output to the edge.</li>
+    </ol>
+    <p>Last data refresh: <strong>{genYear}</strong>. Values marked “proj.” are IMF staff projections, not recorded outcomes.</p>
+
+    <h2>Deployment</h2>
+    <p>
+      The build output is a plain static folder (<code>dist/</code>), ready for Cloudflare Pages, Cloudflare Workers Static Assets,
+      Vercel, Netlify, or any static host. The included GitHub Action deploys to Cloudflare Pages when the
+      <code>CLOUDFLARE_DEPLOY</code> repository variable is set to <code>true</code>. For Vercel, import the repository
+      and add <code>DATABASE_URL</code> as an environment variable — no further configuration is needed.
+    </p>
+
+    <h2>Disclaimer</h2>
+    <p>
+      This site is for research and education. Figures are reproduced from public databases without modification;
+      consult the original sources for official definitions and revisions. Nothing here is investment advice.
+    </p>
+  </div>
+</Base>
