@@ -1,0 +1,17 @@
+{
+  "name": "nepal-macro-overview",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Nepal macroeconomic & financial overview — Astro SSG + Neon Postgres + IMF/World Bank data",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "refresh": "python3 scripts/refresh_data.py"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.4.1",
+    "@neondatabase/serverless": "^1.0.1",
+    "astro": "^5.13.0"
+  }
+}

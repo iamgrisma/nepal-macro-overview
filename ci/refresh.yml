@@ -1,0 +1,61 @@
+name: Refresh data & deploy
+
+# NOTE: this file lives at ci/refresh.yml because the automation token used to create
+# this repo lacked the `workflow` scope. To activate the weekly refresh, move it:
+#   mkdir -p .github/workflows && mv ci/refresh.yml .github/workflows/refresh.yml
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC — World Bank & IMF publish revisions continuously
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["src/**", "scripts/**", "data/**", "astro.config.mjs", "package.json"]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh data from World Bank + IMF into Neon
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pip install psycopg2-binary
+          python scripts/refresh_data.py
+
+      - name: Commit updated data snapshot
+        run: |
+          git config user.name "nepal-macro-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/snapshot.json
+          git diff --cached --quiet || git commit -m "chore(data): weekly refresh $(date -u +%Y-%m-%d)"
+          git push
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build static site
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          npm install
+          npm run build
+
+      - name: Deploy to Cloudflare Pages
+        if: ${{ vars.CLOUDFLARE_DEPLOY == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=nepal-macro
